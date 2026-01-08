@@ -5,7 +5,7 @@
 
 A framework for executing multi-stage scientific discovery workflows with explicit reasoning traces, checkpoint validation, and ground truth evaluation. Designed to demonstrate AI capabilities for complex, long-horizon reasoning tasks in life sciences.
 
-> **Note**: This public repository contains the framework architecture and example templates. A full demonstration with real spaceflight mission data (including unpublished results) is available upon request for interview/evaluation purposes. Please contact the author for access.
+> **Note**: This public repository contains the framework architecture and example templates. A full demonstration with real spaceflight mission data (including unpublished results) is available upon request. Please contact the author for access.
 
 ## 🎯 Overview
 
