@@ -1,0 +1,349 @@
+{
+  "workflow_metadata": {
+    "name": "Spaceflight Biomarker Discovery Pipeline",
+    "version": "1.0.0",
+    "description": "Long-horizon scientific workflow for identifying reproducible molecular biomarkers from spaceflight cfRNA-seq data",
+    "author": "AI Research Agent",
+    "created": "2026-01-08",
+    "domain": "Life Sciences / Spaceflight Biology",
+    "estimated_duration_minutes": 30,
+    "complexity_level": "advanced",
+    "requires_human_review": ["hypothesis_generation", "experimental_design"]
+  },
+  
+  "global_config": {
+    "data_directory": "/mnt/user-data/uploads",
+    "output_directory": "/home/claude/workflow_outputs",
+    "log_level": "detailed",
+    "checkpoint_on_failure": true,
+    "max_retries_per_stage": 2,
+    "reasoning_trace_enabled": true
+  },
+  
+  "stages": [
+    {
+      "id": "stage_1_data_ingestion",
+      "name": "Data Ingestion & Quality Control",
+      "order": 1,
+      "description": "Load all input datasets, validate schemas, and perform quality control checks",
+      "estimated_duration_minutes": 3,
+      
+      "inputs": {
+        "required_files": [
+          "mission_A_timepoint1_deseq.csv",
+          "mission_A_timepoint2_deseq.csv",
+          "mission_A_recovery_deseq.csv",
+          "mission_B_timepoint1_deseq.csv",
+          "mission_B_timepoint2_deseq.csv"
+        ],
+        "expected_columns": ["gene_name", "log2FoldChange", "pvalue", "padj", "baseMean"]
+      },
+      
+      "outputs": {
+        "artifacts": ["data_inventory.json", "qc_report.json", "validated_datasets.pkl"],
+        "metrics": ["files_loaded", "total_genes", "missing_rate", "schema_compliance"]
+      },
+      
+      "success_criteria": {
+        "all_files_loaded": {"type": "boolean", "expected": true, "weight": 1.0},
+        "schema_valid": {"type": "boolean", "expected": true, "weight": 1.0},
+        "missing_rate": {"type": "threshold", "max": 0.10, "weight": 0.8},
+        "min_genes_per_dataset": {"type": "threshold", "min": 1000, "weight": 0.7}
+      },
+      
+      "reasoning_prompts": [
+        "What is the structure of each dataset?",
+        "Are there any data quality issues that need addressing?",
+        "Are the datasets compatible for cross-study comparison?"
+      ],
+      
+      "failure_actions": {
+        "missing_file": "abort_with_error",
+        "schema_mismatch": "attempt_recovery",
+        "high_missing_rate": "warn_and_continue"
+      }
+    },
+    
+    {
+      "id": "stage_2_exploratory_analysis",
+      "name": "Exploratory Data Analysis",
+      "order": 2,
+      "description": "Perform exploratory analysis to understand data distributions and identify patterns",
+      "estimated_duration_minutes": 4,
+      "depends_on": ["stage_1_data_ingestion"],
+      
+      "inputs": {
+        "from_previous": ["validated_datasets.pkl"]
+      },
+      
+      "outputs": {
+        "artifacts": ["eda_summary.json", "distribution_plots.png", "outlier_report.json"],
+        "metrics": ["lfc_range", "pvalue_distribution", "outlier_count", "cross_dataset_overlap"]
+      },
+      
+      "success_criteria": {
+        "distributions_analyzed": {"type": "boolean", "expected": true, "weight": 1.0},
+        "outliers_identified": {"type": "boolean", "expected": true, "weight": 0.8},
+        "cross_dataset_overlap_pct": {"type": "threshold", "min": 0.5, "weight": 0.9}
+      },
+      
+      "reasoning_prompts": [
+        "What are the characteristics of each dataset's fold change distribution?",
+        "Are there systematic differences between Mission A and Mission B?",
+        "What is the overlap in genes between datasets?"
+      ]
+    },
+    
+    {
+      "id": "stage_3_statistical_analysis",
+      "name": "Differential Expression Analysis",
+      "order": 3,
+      "description": "Identify differentially expressed genes using appropriate statistical thresholds",
+      "estimated_duration_minutes": 5,
+      "depends_on": ["stage_2_exploratory_analysis"],
+      
+      "inputs": {
+        "from_previous": ["validated_datasets.pkl", "eda_summary.json"]
+      },
+      
+      "outputs": {
+        "artifacts": ["deg_results.json", "threshold_justification.md", "volcano_plots.png"],
+        "metrics": ["deg_count_per_condition", "threshold_used", "up_down_ratio"]
+      },
+      
+      "success_criteria": {
+        "threshold_justified": {"type": "boolean", "expected": true, "weight": 1.0},
+        "degs_identified": {"type": "threshold", "min": 1, "weight": 0.9},
+        "multiple_testing_corrected": {"type": "boolean", "expected": true, "weight": 1.0}
+      },
+      
+      "reasoning_prompts": [
+        "What significance threshold is appropriate given the sample size?",
+        "How should multiple testing correction be handled?",
+        "What is the biological significance of the identified DEGs?"
+      ],
+      
+      "decision_points": [
+        {
+          "id": "threshold_selection",
+          "question": "Which significance threshold to use?",
+          "options": ["stringent_0.05", "standard_0.05_lfc0.5", "relaxed_0.10", "exploratory_0.20"],
+          "default": "relaxed_0.10",
+          "justification_required": true
+        }
+      ]
+    },
+    
+    {
+      "id": "stage_4_cross_study_validation",
+      "name": "Cross-Study Validation",
+      "order": 4,
+      "description": "Validate findings across independent missions to identify reproducible signatures",
+      "estimated_duration_minutes": 5,
+      "depends_on": ["stage_3_statistical_analysis"],
+      
+      "inputs": {
+        "from_previous": ["deg_results.json", "validated_datasets.pkl"]
+      },
+      
+      "outputs": {
+        "artifacts": ["cross_study_results.json", "correlation_plots.png", "conserved_genes.csv"],
+        "metrics": ["pearson_r", "spearman_rho", "concordant_gene_count", "concordance_rate"]
+      },
+      
+      "success_criteria": {
+        "correlation_computed": {"type": "boolean", "expected": true, "weight": 1.0},
+        "concordant_genes_found": {"type": "threshold", "min": 10, "weight": 0.9},
+        "reproducibility_assessed": {"type": "boolean", "expected": true, "weight": 1.0}
+      },
+      
+      "reasoning_prompts": [
+        "How well do the two missions agree?",
+        "Which genes show reproducible changes?",
+        "What might explain discordant findings?"
+      ]
+    },
+    
+    {
+      "id": "stage_5_biological_interpretation",
+      "name": "Biological Interpretation",
+      "order": 5,
+      "description": "Interpret findings in biological context through pathway and tissue analysis",
+      "estimated_duration_minutes": 6,
+      "depends_on": ["stage_4_cross_study_validation"],
+      
+      "inputs": {
+        "from_previous": ["conserved_genes.csv", "cross_study_results.json"]
+      },
+      
+      "outputs": {
+        "artifacts": ["pathway_enrichment.json", "tissue_deconvolution.json", "biological_narrative.md"],
+        "metrics": ["enriched_pathways", "top_tissues", "interpretation_confidence"]
+      },
+      
+      "success_criteria": {
+        "pathways_analyzed": {"type": "boolean", "expected": true, "weight": 1.0},
+        "tissue_origins_identified": {"type": "boolean", "expected": true, "weight": 0.9},
+        "narrative_coherent": {"type": "boolean", "expected": true, "weight": 0.8}
+      },
+      
+      "reasoning_prompts": [
+        "What biological pathways are affected?",
+        "What tissues contribute to the observed cfRNA changes?",
+        "How do findings relate to known spaceflight physiology?"
+      ],
+      
+      "knowledge_sources": [
+        "Gene Ontology",
+        "KEGG Pathways",
+        "Tissue-specific gene signatures",
+        "Spaceflight biology literature"
+      ]
+    },
+    
+    {
+      "id": "stage_6_hypothesis_generation",
+      "name": "Hypothesis Generation",
+      "order": 6,
+      "description": "Generate mechanistic hypotheses and testable predictions from findings",
+      "estimated_duration_minutes": 5,
+      "depends_on": ["stage_5_biological_interpretation"],
+      
+      "inputs": {
+        "from_previous": ["biological_narrative.md", "pathway_enrichment.json", "conserved_genes.csv"]
+      },
+      
+      "outputs": {
+        "artifacts": ["hypotheses.json", "predictions.json", "alternative_explanations.md"],
+        "metrics": ["hypothesis_count", "testability_score", "novelty_score"]
+      },
+      
+      "success_criteria": {
+        "hypotheses_generated": {"type": "threshold", "min": 3, "weight": 1.0},
+        "hypotheses_testable": {"type": "boolean", "expected": true, "weight": 1.0},
+        "alternatives_considered": {"type": "boolean", "expected": true, "weight": 0.8}
+      },
+      
+      "reasoning_prompts": [
+        "What mechanisms could explain the observed changes?",
+        "What predictions follow from each hypothesis?",
+        "What alternative explanations should be considered?"
+      ],
+      
+      "requires_human_review": true
+    },
+    
+    {
+      "id": "stage_7_experimental_design",
+      "name": "Experimental Validation Design",
+      "order": 7,
+      "description": "Design experiments to validate hypotheses and biomarker candidates",
+      "estimated_duration_minutes": 5,
+      "depends_on": ["stage_6_hypothesis_generation"],
+      
+      "inputs": {
+        "from_previous": ["hypotheses.json", "conserved_genes.csv"]
+      },
+      
+      "outputs": {
+        "artifacts": ["experimental_protocol.md", "power_analysis.json", "expected_outcomes.json"],
+        "metrics": ["experiments_proposed", "feasibility_score", "estimated_cost"]
+      },
+      
+      "success_criteria": {
+        "experiments_defined": {"type": "threshold", "min": 2, "weight": 1.0},
+        "power_analysis_done": {"type": "boolean", "expected": true, "weight": 0.9},
+        "controls_specified": {"type": "boolean", "expected": true, "weight": 1.0}
+      },
+      
+      "reasoning_prompts": [
+        "What experiments would validate the top hypotheses?",
+        "What sample sizes are needed for adequate power?",
+        "What controls and comparisons are essential?"
+      ],
+      
+      "requires_human_review": true
+    },
+    
+    {
+      "id": "stage_8_scientific_communication",
+      "name": "Scientific Communication",
+      "order": 8,
+      "description": "Generate publication-ready outputs including figures, reports, and presentations",
+      "estimated_duration_minutes": 7,
+      "depends_on": ["stage_7_experimental_design"],
+      
+      "inputs": {
+        "from_previous": ["all_previous_artifacts"]
+      },
+      
+      "outputs": {
+        "artifacts": ["final_report.docx", "presentation.pptx", "figures/", "supplementary_data.xlsx"],
+        "metrics": ["completeness_score", "figure_count", "word_count"]
+      },
+      
+      "success_criteria": {
+        "report_generated": {"type": "boolean", "expected": true, "weight": 1.0},
+        "figures_embedded": {"type": "boolean", "expected": true, "weight": 0.9},
+        "methods_documented": {"type": "boolean", "expected": true, "weight": 1.0}
+      },
+      
+      "reasoning_prompts": [
+        "What are the key findings to communicate?",
+        "How should results be visualized?",
+        "What level of detail is appropriate?"
+      ]
+    }
+  ],
+  
+  "evaluation_framework": {
+    "stage_completion_scoring": {
+      "method": "weighted_criteria",
+      "passing_threshold": 0.7,
+      "weights_sum_to": 1.0
+    },
+    
+    "overall_metrics": [
+      {
+        "name": "workflow_completion_rate",
+        "description": "Percentage of stages successfully completed",
+        "target": 1.0
+      },
+      {
+        "name": "reasoning_quality_score",
+        "description": "Quality of reasoning traces (human-evaluated)",
+        "target": 0.8
+      },
+      {
+        "name": "scientific_accuracy",
+        "description": "Accuracy of conclusions vs ground truth",
+        "target": 0.9
+      },
+      {
+        "name": "time_efficiency",
+        "description": "Actual vs estimated duration ratio",
+        "target": 1.0
+      }
+    ],
+    
+    "ground_truth_comparisons": [
+      {"metric": "mission_a_t1_deg_count", "expected": "N/A", "note": "Depends on input data"},
+      {"metric": "mission_a_recovery_deg_count", "expected": "N/A", "note": "Depends on input data"},
+      {"metric": "common_genes", "expected": "N/A", "note": "Depends on input data"},
+      {"metric": "erythroid_concordance", "expected": "N/A", "note": "Depends on input data"},
+      {"metric": "conserved_genes", "expected": "N/A", "note": "Depends on input data"}
+    ]
+  },
+  
+  "reasoning_trace_schema": {
+    "entry_format": {
+      "timestamp": "ISO8601",
+      "stage_id": "string",
+      "reasoning_type": "enum[observation, inference, decision, uncertainty, verification]",
+      "content": "string",
+      "confidence": "float[0-1]",
+      "evidence": "array[string]",
+      "alternatives_considered": "array[string]"
+    }
+  }
+}
